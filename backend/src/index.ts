@@ -1,24 +1,31 @@
 import express from 'express';
 import cors from 'cors';
 import { PrismaClient, Role, UnidadeMedida, ObraStatus, RequestStatus, PurchaseStatus, EquipStatus } from '@prisma/client';
+import { tenantMiddleware } from './infrastructure/http/middlewares/tenantMiddleware';
+import { errorHandler } from './infrastructure/http/errorHandler';
+import { EstoqueController } from './infrastructure/http/controllers/EstoqueController';
+import { AlocacaoEquipamentoController } from './infrastructure/http/controllers/AlocacaoEquipamentoController';
+import { AprovacaoSolicitacaoController } from './infrastructure/http/controllers/AprovacaoSolicitacaoController';
+import equipamentoRoutes from './infrastructure/http/routes/equipamentoRoutes';
+import solicitacaoRoutes from './infrastructure/http/routes/solicitacaoRoutes';
+import compraRoutes from './infrastructure/http/routes/compraRoutes';
+import inventarioRoutes from './infrastructure/http/routes/inventarioRoutes';
 
-const app = express();
+// Exported app for testing
+export const app = express();
 app.use(cors());
 app.use(express.json());
-
+// Register modular routes
+app.use(equipamentoRoutes);
+app.use(solicitacaoRoutes);
+app.use(compraRoutes);
+app.use(inventarioRoutes);
+app.use(errorHandler);
 const port = process.env.PORT || 3001;
 const prisma = new PrismaClient();
 
-// --- TENANT MIDDLEWARE (Garante isolamento multi-tenant lógico) ---
-app.use(async (req, res, next) => {
-  let tenantId = req.headers['x-tenant-id'] as string;
-  if (!tenantId) {
-    const defaultTenant = await prisma.tenant.findFirst();
-    tenantId = defaultTenant ? defaultTenant.id : '';
-  }
-  (req as any).tenantId = tenantId;
-  next();
-});
+// --- TENANT MIDDLEWARE (moved to separate file) ---
+app.use(tenantMiddleware);
 
 // --- ROTAS DO SISTEMA ---
 
@@ -295,6 +302,8 @@ app.post('/api/estoque/enderecar', async (req, res) => {
     res.status(500).json({ error: 'Erro ao atualizar o endereçamento logístico.' });
   }
 });
+app.post('/api/estoque', EstoqueController.create);
+app.put('/api/estoque/:id/quantity', EstoqueController.updateQuantity);
 
 // 5. Solicitações de Materiais
 app.get('/api/solicitacoes', async (req, res) => {
@@ -909,6 +918,9 @@ app.post('/api/equipamentos/:id/alocar', async (req, res) => {
     res.status(500).json({ error: 'Erro ao atualizar a alocação de equipamento.' });
   }
 });
+
+// Middleware de tratamento de erros (global)
+
 
 // Iniciar o Servidor
 app.listen(port, () => {
