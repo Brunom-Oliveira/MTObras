@@ -1,0 +1,289 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  OWNER
+  ENGINEER
+  BUYER
+  WAREHOUSE_KEEPER
+  FOREMAN
+}
+
+enum ObraStatus {
+  ACTIVE
+  SUSPENDED
+  COMPLETED
+}
+
+enum RequestStatus {
+  SOLICITADO
+  APROVADO
+  COMPRADO
+  RECEBIDO
+  CANCELADO
+}
+
+enum PurchaseStatus {
+  COTACAO
+  PEDIDO_GERADO
+  PARCIALMENTE_RECEBIDO
+  RECEBIDO
+  CANCELADO
+}
+
+enum EquipStatus {
+  DISPONIVEL
+  EM_USO
+  MANUTENCAO
+  BAIXADO
+}
+
+enum UnidadeMedida {
+  UN
+  M
+  M2
+  M3
+  KG
+  L
+  SACO
+  CX
+  ROLO
+  BARRA
+  LATA
+  PAR
+  TON
+}
+
+// 0. SaaS Multi-Tenancy (Isolamento de Contas Corporativas)
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  cnpj      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  obras         Obra[]
+  materiais     Material[]
+  solicitacoes  SolicitacaoMaterial[]
+  pedidosCompra PedidoCompra[]
+  consumos      MovimentacaoConsumo[]
+  inventarios   Inventario[]
+  equipamentos  Equipamento[]
+}
+
+// 1. Controle de Usuários e Perfis
+model User {
+  id           String   @id @default(uuid())
+  tenantId     String
+  email        String   @unique
+  password     String
+  name         String
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  solicitacoes  SolicitacaoMaterial[] @relation("Requester")
+  aprovacoes    SolicitacaoMaterial[] @relation("Approver")
+  pedidosCompra PedidoCompra[]        @relation("Buyer")
+  consumos      MovimentacaoConsumo[] @relation("Responsible")
+}
+
+// 2. Cadastro de Obras
+model Obra {
+  id              String      @id @default(uuid())
+  tenantId        String
+  code            String      @unique
+  name            String
+  clientName      String
+  address         String
+  budget          Float
+  status          ObraStatus  @default(ACTIVE)
+  startDate       DateTime
+  expectedEndDate DateTime
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  tenant          Tenant      @relation(fields: [tenantId], references: [id])
+  estoques        EstoqueObra[]
+  solicitacoes    SolicitacaoMaterial[]
+  consumos        MovimentacaoConsumo[]
+  inventarios     Inventario[]
+  equipamentos    Equipamento[]
+}
+
+// 3. Cadastro Geral de Materiais
+model Material {
+  id              String        @id @default(uuid())
+  tenantId        String
+  code            String        @unique
+  description     String
+  category        String
+  unit            UnidadeMedida
+  averageCost     Float         @default(0.0)
+  defaultSupplier String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  tenant          Tenant        @relation(fields: [tenantId], references: [id])
+  estoques        EstoqueObra[]
+  requestItems    SolicitacaoItem[]
+  purchaseItems   PedidoItem[]
+  consumos        MovimentacaoConsumo[]
+  inventarioItems InventarioItem[]
+}
+
+// 4. Consolidação de Estoque por Obra
+model EstoqueObra {
+  id              String      @id @default(uuid())
+  obraId          String
+  materialId      String
+  quantity        Float       @default(0.0) // Saldo físico atual
+  reservedQty     Float       @default(0.0) // Saldo reservado para solicitações aprovadas
+  minQty          Float       @default(0.0) // Estoque mínimo (gatilho de compra)
+  avgConsumption  Float       @default(0.0) // Consumo médio mensal
+
+  obra            Obra        @relation(fields: [obraId], references: [id], onDelete: Cascade)
+  material        Material    @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  enderecos       EnderecamentoEstoque[]
+
+  @@unique([obraId, materialId])
+}
+
+// 5. Endereçamento Logístico (Conceito WMS Simplificado para Canteiro)
+model EnderecamentoEstoque {
+  id             String       @id @default(uuid())
+  estoqueObraId  String
+  local          String       // Ex: "Contêiner 01", "Almoxarifado Principal", "Pátio Leste"
+  subLocal       String?      // Ex: "Prateleira A", "Baia de Areia", "Pilha Sul", "Estante 2"
+  quantity       Float        @default(0.0) // Quantidade localizada neste endereço
+
+  estoqueObra    EstoqueObra  @relation(fields: [estoqueObraId], references: [id], onDelete: Cascade)
+
+  @@unique([estoqueObraId, local, subLocal], name: "endereco_unico")
+}
+
+// 6. Fluxo de Solicitação de Materiais
+model SolicitacaoMaterial {
+  id            String         @id @default(uuid())
+  tenantId      String
+  obraId        String
+  requesterId   String
+  approverId    String?
+  status        RequestStatus  @default(SOLICITADO)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  obra          Obra           @relation(fields: [obraId], references: [id])
+  requester     User           @relation("Requester", fields: [requesterId], references: [id])
+  approver      User?          @relation("Approver", fields: [approverId], references: [id])
+  items         SolicitacaoItem[]
+  pedidos       PedidoCompra[]
+}
+
+model SolicitacaoItem {
+  id            String              @id @default(uuid())
+  solicitacaoId String
+  materialId    String
+  quantity      Float
+
+  solicitacao   SolicitacaoMaterial @relation(fields: [solicitacaoId], references: [id], onDelete: Cascade)
+  material      Material            @relation(fields: [materialId], references: [id])
+}
+
+// 7. Gestão de Compras e Cotações
+model PedidoCompra {
+  id            String              @id @default(uuid())
+  tenantId      String
+  solicitacaoId String?
+  buyerId       String
+  supplierName  String
+  status        PurchaseStatus      @default(COTACAO)
+  freightCost   Float               @default(0.0)
+  deliveryTerms String?             // ex: "FOB", "CIF", "Prazo: 10 dias"
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  tenant        Tenant              @relation(fields: [tenantId], references: [id])
+  solicitacao   SolicitacaoMaterial? @relation(fields: [solicitacaoId], references: [id])
+  buyer         User                 @relation("Buyer", fields: [buyerId], references: [id])
+  items         PedidoItem[]
+}
+
+model PedidoItem {
+  id            String          @id @default(uuid())
+  pedidoId      String
+  materialId    String
+  qtyOrdered    Float
+  qtyReceived   Float           @default(0.0) // Auxilia no controle de divergências no Recebimento
+  priceUnit     Float
+
+  pedido        PedidoCompra    @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  material      Material        @relation(fields: [materialId], references: [id])
+}
+
+// 8. Registro de Consumo Diário por Equipe
+model MovimentacaoConsumo {
+  id            String      @id @default(uuid())
+  tenantId      String
+  obraId        String
+  materialId    String
+  quantity      Float
+  team          String      // ex: "Alvenaria", "Estrutura", "Elétrica"
+  responsibleId String      // Usuário que registrou ou retirou
+  activity      String      // ex: "Concretagem da laje do 2º andar"
+  date          DateTime    @default(now())
+
+  tenant        Tenant      @relation(fields: [tenantId], references: [id])
+  obra          Obra        @relation(fields: [obraId], references: [id])
+  material      Material    @relation(fields: [materialId], references: [id])
+  responsible   User        @relation("Responsible", fields: [responsibleId], references: [id])
+}
+
+// 9. Inventários Cíclicos / Rotativos e Gerais
+model Inventario {
+  id            String      @id @default(uuid())
+  tenantId      String
+  obraId        String
+  type          String      // "ROTATIVO" ou "GERAL"
+  status        String      // "EM_ANDAMENTO", "CONCLUIDO", "AJUSTADO"
+  date          DateTime    @default(now())
+
+  tenant        Tenant      @relation(fields: [tenantId], references: [id])
+  obra          Obra        @relation(fields: [obraId], references: [id])
+  items         InventarioItem[]
+}
+
+model InventarioItem {
+  id            String      @id @default(uuid())
+  inventarioId  String
+  materialId    String
+  qtySystem     Float       // Quantidade registrada no sistema antes da contagem
+  qtyPhysical   Float       // Quantidade contada fisicamente
+  diff          Float       // qtyPhysical - qtySystem (Desvio)
+
+  inventario    Inventario  @relation(fields: [inventarioId], references: [id], onDelete: Cascade)
+  material      Material    @relation(fields: [materialId], references: [id])
+}
+
+// 10. Gestão de Equipamentos
+model Equipamento {
+  id            String      @id @default(uuid())
+  tenantId      String
+  code          String      @unique // Ex: "BET-01"
+  name          String      // Ex: "Betoneira 400L"
+  type          String      // Categoria do equipamento
+  status        EquipStatus @default(DISPONIVEL)
+  obraId        String?     // Onde está locado atualmente (nulo se no almoxarifado central)
+
+  tenant        Tenant      @relation(fields: [tenantId], references: [id])
+  obra          Obra?       @relation(fields: [obraId], references: [id])
+}
