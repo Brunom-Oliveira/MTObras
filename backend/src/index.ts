@@ -16,11 +16,13 @@ export const app = express();
 app.use(cors());
 app.use(express.json());
 // Register modular routes
-app.use(equipamentoRoutes);
-app.use(solicitacaoRoutes);
-app.use(compraRoutes);
-app.use(inventarioRoutes);
+import routes from './infrastructure/http/routes';
+app.use('/api/v1', routes);
 app.use(errorHandler);
+
+// Swagger documentation
+import setupSwagger from './infrastructure/http/swagger';
+setupSwagger(app);
 const port = process.env.PORT || 3001;
 const prisma = new PrismaClient();
 
