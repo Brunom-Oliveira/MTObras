@@ -7,7 +7,7 @@ import { AprovacaoSolicitacaoUseCase, AprovarDTO } from '../../../domain/usecase
 const solicitacaoRepo = new PrismaSolicitacaoRepository();
 const estoqueRepo = new PrismaEstoqueRepository();
 const enderecoRepo = new PrismaEnderecoEstoqueRepository();
-const aprovacaoUseCase = new AprovacaoSolicitacaoUseCase(solicitacaoRepo, estoqueRepo, enderecoRepo);
+const aprovacaoUseCase = new AprovacaoSolicitacaoUseCase(solicitacaoRepo, estoqueRepo);
 
 export class AprovacaoSolicitacaoController {
   static async approve(req: Request, res: Response, next: any) {

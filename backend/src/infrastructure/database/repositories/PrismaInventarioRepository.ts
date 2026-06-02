@@ -18,13 +18,14 @@ export class PrismaInventarioRepository implements InventarioRepository {
         tenantId: data.tenantId,
         obraId: data.obraId,
         type: data.type,
+        status: 'OPEN',
         items: {
           create: data.items.map(i => ({
             materialId: i.materialId,
             qtySystem: i.qtySystem,
             qtyPhysical: i.qtyPhysical,
             diff: i.diff,
-          } as Prisma.InventarioItemCreateInput)),
+          })),
         },
       },
     });

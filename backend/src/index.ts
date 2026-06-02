@@ -925,6 +925,8 @@ app.post('/api/equipamentos/:id/alocar', async (req, res) => {
 
 
 // Iniciar o Servidor
-app.listen(port, () => {
-  console.log(`[BACKEND] WMS de Obras rodando em http://localhost:${port}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(port, () => {
+    console.log(`[BACKEND] WMS de Obras rodando em http://localhost:${port}`);
+  });
+}

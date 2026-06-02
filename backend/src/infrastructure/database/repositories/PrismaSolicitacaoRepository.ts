@@ -1,5 +1,5 @@
 import { SolicitacaoRepository } from '../../../domain/repositories/SolicitacaoRepository';
-import { SolicitacaoMaterial, SolicitacaoItem, Prisma } from '@prisma/client';
+import { PrismaClient, Prisma, RequestStatus, SolicitacaoMaterial } from '@prisma/client';
 import { prisma } from '../prisma';
 
 export class PrismaSolicitacaoRepository implements SolicitacaoRepository {
@@ -22,21 +22,20 @@ export class PrismaSolicitacaoRepository implements SolicitacaoRepository {
         tenantId: data.tenantId,
         obraId: data.obraId,
         requesterId: data.requesterId,
-        status: 'PENDING',
+        status: RequestStatus.SOLICITADO,
         items: {
-          create: data.items.map(i => ({ materialId: i.materialId, quantity: i.quantity } as Prisma.SolicitacaoItemCreateInput)),
+          create: data.items.map(i => ({ materialId: i.materialId, quantity: i.quantity })),
         },
       },
     });
   }
 
-  async updateStatus(id: string, status: string, approverId?: string | null): Promise<SolicitacaoMaterial> {
+  async updateStatus(id: string, status: RequestStatus, approverId?: string): Promise<SolicitacaoMaterial> {
     return prisma.solicitacaoMaterial.update({
       where: { id },
       data: {
         status,
-        approverId: approverId ?? undefined,
-        approvedAt: status === 'APPROVED' ? new Date() : undefined,
+        approverId: approverId ?? undefined
       },
     });
   }

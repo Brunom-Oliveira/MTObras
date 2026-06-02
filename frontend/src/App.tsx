@@ -22,8 +22,10 @@ import {
 // Import Pages
 import Dashboard from './pages/Dashboard';
 import WmsManagement from './pages/WmsManagement';
+import MestreObrasApp from './pages/MestreObrasApp';
 
 export default function App() {
+  const [isMobileMode, setIsMobileMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'wms' | 'cadastros' | 'operacoes'>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -201,6 +203,28 @@ export default function App() {
       });
   };
 
+  const handleSolicitarMobile = async (obraId: string, materialId: string, quantity: number): Promise<boolean> => {
+    try {
+      const res = await fetch('http://localhost:3001/api/solicitacoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          obraId,
+          requesterId: '5', // Mestre de obras
+          items: [{ materialId, quantity }]
+        })
+      });
+      if (res.ok) {
+        loadData();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  };
+
   const handleConsumo = (e: React.FormEvent) => {
     e.preventDefault();
     fetch('http://localhost:3001/api/consumo', {
@@ -229,9 +253,18 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex text-slate-200">
-      {/* Sidebar - Desktop Layout */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 glass-panel border-r border-white/5 flex flex-col justify-between transition-transform transform lg:translate-x-0 lg:static ${sidebarOpen ? 'translate-x-0' : '-translate-x-0 hidden lg:flex'}`}>
+    <>
+      {isMobileMode ? (
+        <MestreObrasApp 
+          obras={obrasList}
+          materiais={materiaisList}
+          onExit={() => setIsMobileMode(false)}
+          onSolicitar={handleSolicitarMobile}
+        />
+      ) : (
+        <div className="min-h-screen flex text-slate-200">
+          {/* Sidebar - Desktop Layout */}
+          <aside className={`fixed inset-y-0 left-0 z-40 w-64 glass-panel border-r border-white/5 flex flex-col justify-between transition-transform transform lg:translate-x-0 lg:static ${sidebarOpen ? 'translate-x-0' : '-translate-x-0 hidden lg:flex'}`}>
         <div className="p-6">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
@@ -293,6 +326,13 @@ export default function App() {
             <p className="font-bold text-white leading-none">Almoxarife Principal</p>
             <p className="text-slate-500 text-[10px] mt-0.5 leading-none">ID: 4 • WAREHOUSE_KEEPER</p>
           </div>
+          <button 
+            onClick={() => setIsMobileMode(true)}
+            className="ml-auto p-1.5 bg-cyan-500/20 text-cyan-400 rounded hover:bg-cyan-500/40 transition"
+            title="Acessar Visão Mestre de Obras (App Mobile)"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+          </button>
         </div>
       </aside>
 
@@ -682,5 +722,7 @@ export default function App() {
         </main>
       </div>
     </div>
+      )}
+    </>
   );
 }

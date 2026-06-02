@@ -3,7 +3,7 @@ import { AppError } from '../../errors/AppError';
 import { z } from 'zod';
 import { EstoqueRepository } from '../../../domain/repositories/EstoqueRepository';
 import { prisma } from '../../../infrastructure/database/prisma';
-import { SolicitacaoMaterial } from '@prisma/client';
+import { SolicitacaoMaterial, RequestStatus } from '@prisma/client';
 
 export interface AprovarDTO {
   solicitacaoId: string;
@@ -14,7 +14,6 @@ export class AprovacaoSolicitacaoUseCase {
   constructor(
     private solicitacaoRepo: SolicitacaoRepository,
     private estoqueRepo: EstoqueRepository,
-    private enderecoRepo: EnderecoEstoqueRepository,
   ) {}
 
   /**
@@ -33,9 +32,9 @@ export class AprovacaoSolicitacaoUseCase {
     }
     const { solicitacaoId, approverId } = parse.data;
     // Atualiza status da solicitação
-    const updated = await this.solicitacaoRepo.updateStatus(solicitacaoId, 'APPROVED', approverId);
+    const updated = await this.solicitacaoRepo.updateStatus(solicitacaoId, RequestStatus.APROVADO, approverId);
     // Reserva de estoque: buscar itens da solicitação e atualizar quantidade reservada
-    const items = await prisma.solicitacaoItem.findMany({ where: { solicitacaoMaterialId: solicitacaoId } });
+    const items = await prisma.solicitacaoItem.findMany({ where: { solicitacaoId: solicitacaoId } });
     for (const item of items) {
       const estoque = await this.estoqueRepo.findEstoque(updated.obraId, item.materialId);
       if (!estoque) {

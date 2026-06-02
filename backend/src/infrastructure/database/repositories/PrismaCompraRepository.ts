@@ -1,5 +1,5 @@
 import { CompraRepository } from '../../../domain/repositories/CompraRepository';
-import { PedidoCompra, Prisma } from '@prisma/client';
+import { PedidoCompra, Prisma, PurchaseStatus } from '@prisma/client';
 import { prisma } from '../prisma';
 
 export class PrismaCompraRepository implements CompraRepository {
@@ -33,14 +33,14 @@ export class PrismaCompraRepository implements CompraRepository {
             materialId: i.materialId,
             qtyOrdered: i.qtyOrdered,
             priceUnit: i.priceUnit,
-          } as Prisma.PedidoCompraItemCreateInput)),
+          })),
         },
-        status: 'CREATED',
+        status: PurchaseStatus.PEDIDO_GERADO,
       },
     });
   }
 
-  async updateStatus(id: string, status: string): Promise<PedidoCompra> {
+  async updateStatus(id: string, status: PurchaseStatus): Promise<PedidoCompra> {
     return prisma.pedidoCompra.update({
       where: { id },
       data: { status },
@@ -48,7 +48,7 @@ export class PrismaCompraRepository implements CompraRepository {
   }
 
   async updateReceivedQuantity(itemId: string, quantity: number): Promise<void> {
-    await prisma.pedidoCompraItem.update({
+    await prisma.pedidoItem.update({
       where: { id: itemId },
       data: { qtyReceived: quantity },
     });
