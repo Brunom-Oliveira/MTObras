@@ -2,6 +2,9 @@
   "name": "wms-obras-backend",
   "version": "1.0.0",
   "private": true,
+  "prisma": {
+    "seed": "npx ts-node prisma/seed.ts"
+  },
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsup src/index.ts --watch --onSuccess \"node dist/index.js\"",
