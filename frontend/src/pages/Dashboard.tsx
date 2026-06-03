@@ -11,6 +11,8 @@ import {
   Brain,
   ShieldAlert
 } from 'lucide-react';
+import { ResponsiveContainer, AreaChart, Area, XAxis, Tooltip, CartesianGrid } from 'recharts';
+import { useQuery } from '@tanstack/react-query';
 
 interface KPI {
   valorComprado: number;
@@ -85,6 +87,20 @@ export default function Dashboard() {
         setLoading(false);
       });
   }, []);
+
+  const { data: chartData = [
+    { name: 'Semana 1', compras: 0, consumo: 0 },
+    { name: 'Semana 2', compras: 0, consumo: 0 },
+    { name: 'Semana 3', compras: 0, consumo: 0 },
+    { name: 'Semana 4', compras: 0, consumo: 0 },
+    { name: 'Semana Atual', compras: 0, consumo: 0 },
+  ] } = useQuery({
+    queryKey: ['dashboardChart'],
+    queryFn: async () => {
+      const res = await api.get('/dashboard/chart');
+      return res.data;
+    }
+  });
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -191,54 +207,60 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Glowing Responsive SVG Area Chart */}
-            <div className="h-64 w-full relative">
-              <svg viewBox="0 0 500 200" className="w-full h-full overflow-visible">
-                <defs>
-                  <linearGradient id="cyanGlow" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.3"/>
-                    <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.0"/>
-                  </linearGradient>
-                  <linearGradient id="emeraldGlow" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.3"/>
-                    <stop offset="100%" stopColor="#10b981" stopOpacity="0.0"/>
-                  </linearGradient>
-                </defs>
-                
-                {/* Grid Lines */}
-                <line x1="0" y1="40" x2="500" y2="40" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                <line x1="0" y1="90" x2="500" y2="90" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                <line x1="0" y1="140" x2="500" y2="140" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                <line x1="0" y1="190" x2="500" y2="190" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
-
-                {/* Cyan Area (Compras) */}
-                <path d="M 0 190 Q 70 80 120 110 T 250 50 T 380 90 T 500 40 L 500 190 L 0 190 Z" fill="url(#cyanGlow)" />
-                <path d="M 0 190 Q 70 80 120 110 T 250 50 T 380 90 T 500 40" fill="none" stroke="#06b6d4" strokeWidth="2.5" className="drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]" />
-
-                {/* Emerald Area (Consumo) */}
-                <path d="M 0 190 Q 70 140 120 120 T 250 100 T 380 70 T 500 95 L 500 190 L 0 190 Z" fill="url(#emeraldGlow)" />
-                <path d="M 0 190 Q 70 140 120 120 T 250 100 T 380 70 T 500 95" fill="none" stroke="#10b981" strokeWidth="2.5" className="drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
-
-                {/* Chart Dots */}
-                <circle cx="120" cy="110" r="4" fill="#06b6d4" />
-                <circle cx="250" cy="50" r="4" fill="#06b6d4" />
-                <circle cx="380" cy="90" r="4" fill="#06b6d4" />
-                <circle cx="500" cy="40" r="4" fill="#06b6d4" />
-
-                <circle cx="120" cy="120" r="4" fill="#10b981" />
-                <circle cx="250" cy="100" r="4" fill="#10b981" />
-                <circle cx="380" cy="70" r="4" fill="#10b981" />
-                <circle cx="500" cy="95" r="4" fill="#10b981" />
-              </svg>
-            </div>
-            
-            {/* Chart X Labels */}
-            <div className="flex justify-between text-[10px] text-slate-500 font-mono mt-2 px-2">
-              <span>Semana 1</span>
-              <span>Semana 2</span>
-              <span>Semana 3</span>
-              <span>Semana 4</span>
-              <span>Semana 5 (Atual)</span>
+            {/* Glowing Responsive Area Chart with Recharts */}
+            <div className="h-64 w-full relative mt-4 text-xs font-mono">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="cyanGlow" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4}/>
+                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="emeraldGlow" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="rgba(255,255,255,0.2)" 
+                    tick={{ fill: '#64748b' }} 
+                    axisLine={false} 
+                    tickLine={false}
+                  />
+                  
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                    itemStyle={{ color: '#fff', fontWeight: 'bold' }}
+                    formatter={(value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
+                  />
+                  
+                  <Area 
+                    type="monotone" 
+                    dataKey="compras" 
+                    name="Compras"
+                    stroke="#06b6d4" 
+                    strokeWidth={3}
+                    fillOpacity={1} 
+                    fill="url(#cyanGlow)" 
+                    activeDot={{ r: 6, fill: '#06b6d4', stroke: 'rgba(6,182,212,0.5)', strokeWidth: 4 }}
+                  />
+                  
+                  <Area 
+                    type="monotone" 
+                    dataKey="consumo" 
+                    name="Consumo"
+                    stroke="#10b981" 
+                    strokeWidth={3}
+                    fillOpacity={1} 
+                    fill="url(#emeraldGlow)" 
+                    activeDot={{ r: 6, fill: '#10b981', stroke: 'rgba(16,185,129,0.5)', strokeWidth: 4 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
         </div>

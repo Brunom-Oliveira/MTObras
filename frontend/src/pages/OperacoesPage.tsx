@@ -2,9 +2,10 @@ import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
-import { Truck, Flame, ClipboardList, Plus, Wrench } from 'lucide-react';
+import { Truck, Flame, ClipboardList, Plus, Wrench, WifiOff } from 'lucide-react';
 import { api } from '../lib/axios';
 import { useAuth } from '../contexts/AuthContext';
+import { offlineQueue } from '../lib/offlineQueue';
 
 export default function OperacoesPage() {
   const queryClient = useQueryClient();
@@ -23,33 +24,77 @@ export default function OperacoesPage() {
 
   // Mutations
   const recebimentoMutation = useMutation({
-    mutationFn: (data: any) => api.post(`/wms/recebimento/${data.pedidoId}`, {
-      items: [{
-        pedidoItemId: 'item-1', // simplificação, na vida real seria dinamico
-        materialId: compras.find((c: any) => c.id === data.pedidoId)?.items[0]?.materialId || 'mat-1',
-        qtyReceived: parseFloat(data.qtd),
-        localArmazenagem: data.local,
-        subLocal: data.sublocal
-      }]
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['compras'] });
-      toast.success('Recebimento WMS concluído com sucesso!');
+    mutationFn: async (data: any) => {
+      if (!navigator.onLine) {
+        offlineQueue.enqueue({
+          url: `/wms/recebimento/${data.pedidoId}`,
+          method: 'POST',
+          body: {
+            items: [{
+              pedidoItemId: 'item-1',
+              materialId: compras.find((c: any) => c.id === data.pedidoId)?.items[0]?.materialId || 'mat-1',
+              qtyReceived: parseFloat(data.qtd),
+              localArmazenagem: data.local,
+              subLocal: data.sublocal
+            }]
+          },
+          type: 'RECEBIMENTO',
+          description: `Recebimento Logístico (Qtd: ${data.qtd})`
+        });
+        return Promise.resolve({ offline: true });
+      }
+
+      return api.post(`/wms/recebimento/${data.pedidoId}`, {
+        items: [{
+          pedidoItemId: 'item-1',
+          materialId: compras.find((c: any) => c.id === data.pedidoId)?.items[0]?.materialId || 'mat-1',
+          qtyReceived: parseFloat(data.qtd),
+          localArmazenagem: data.local,
+          subLocal: data.sublocal
+        }]
+      });
+    },
+    onSuccess: (res: any) => {
+      if (res?.offline) {
+        toast.success('Sem internet! Operação salva na Fila Offline.', { icon: '📦' });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['compras'] });
+        toast.success('Recebimento WMS concluído com sucesso!');
+      }
       resetRecebimento();
     },
     onError: () => toast.error('Erro no recebimento.')
   });
 
   const consumoMutation = useMutation({
-    mutationFn: (data: any) => api.post('/consumo', {
-      obraId: data.obraId,
-      materialId: data.matId,
-      quantity: parseFloat(data.qtd),
-      team: data.team,
-      activity: data.activity
-    }),
-    onSuccess: () => {
-      toast.success('Consumo registrado e estoque deduzido!');
+    mutationFn: async (data: any) => {
+      const body = {
+        obraId: data.obraId,
+        materialId: data.matId,
+        quantity: parseFloat(data.qtd),
+        team: data.team,
+        activity: data.activity
+      };
+
+      if (!navigator.onLine) {
+        offlineQueue.enqueue({
+          url: '/consumo',
+          method: 'POST',
+          body,
+          type: 'CONSUMO',
+          description: `Baixa de Consumo (Qtd: ${data.qtd})`
+        });
+        return Promise.resolve({ offline: true });
+      }
+
+      return api.post('/consumo', body);
+    },
+    onSuccess: (res: any) => {
+      if (res?.offline) {
+        toast.success('Sem internet! Baixa de consumo salva offline.', { icon: '📝' });
+      } else {
+        toast.success('Consumo registrado e estoque deduzido!');
+      }
       resetConsumo();
     },
     onError: () => toast.error('Erro ao registrar consumo.')

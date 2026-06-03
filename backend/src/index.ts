@@ -977,6 +977,62 @@ app.post('/api/equipamentos/:id/alocar', async (req, res) => {
   }
 });
 
+// 11. Dashboard Analytics
+app.get('/api/dashboard/chart', async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  try {
+    const today = new Date();
+    const thirtyFiveDaysAgo = new Date();
+    thirtyFiveDaysAgo.setDate(today.getDate() - 35);
+
+    const pedidos = await prisma.pedidoCompra.findMany({
+      where: { tenantId, createdAt: { gte: thirtyFiveDaysAgo } },
+      include: { items: true }
+    });
+
+    const consumos = await prisma.movimentacaoConsumo.findMany({
+      where: { tenantId, date: { gte: thirtyFiveDaysAgo } },
+      include: { material: true }
+    });
+
+    const weeksData = [
+      { name: 'Semana 1', compras: 0, consumo: 0 },
+      { name: 'Semana 2', compras: 0, consumo: 0 },
+      { name: 'Semana 3', compras: 0, consumo: 0 },
+      { name: 'Semana 4', compras: 0, consumo: 0 },
+      { name: 'Semana Atual', compras: 0, consumo: 0 },
+    ];
+
+    const getWeekIndex = (dateStr: string | Date) => {
+      const d = new Date(dateStr);
+      const diffTime = Math.abs(today.getTime() - d.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays <= 7) return 4;
+      if (diffDays <= 14) return 3;
+      if (diffDays <= 21) return 2;
+      if (diffDays <= 28) return 1;
+      return 0;
+    };
+
+    pedidos.forEach(p => {
+      const wIdx = getWeekIndex(p.createdAt);
+      const valorTotal = p.items.reduce((acc, item) => acc + (item.qtyOrdered * item.priceUnit), 0) + p.freightCost;
+      weeksData[wIdx].compras += valorTotal;
+    });
+
+    consumos.forEach(c => {
+      const wIdx = getWeekIndex(c.date);
+      const valorTotal = c.quantity * (c.material.averageCost || 0);
+      weeksData[wIdx].consumo += valorTotal;
+    });
+
+    res.json(weeksData);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erro ao processar dados do gráfico.' });
+  }
+});
+
 // Middleware de tratamento de erros (global)
 
 

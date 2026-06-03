@@ -1,12 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Layers, ClipboardList, FileText, Package, User, Menu, X, Smartphone, Wrench } from 'lucide-react';
+import { LayoutDashboard, Layers, ClipboardList, FileText, Package, User, Menu, X, Smartphone, Wrench, WifiOff, CloudLightning } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { offlineQueue, OfflineRequest } from '../lib/offlineQueue';
+import { api } from '../lib/axios';
+import { toast } from 'react-hot-toast';
 
 export default function MainLayout() {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
+  
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [queueCount, setQueueCount] = useState(offlineQueue.getQueue().length);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      processOfflineQueue();
+    };
+    const handleOffline = () => setIsOnline(false);
+    const handleQueueUpdate = () => setQueueCount(offlineQueue.getQueue().length);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('offline-queue-updated', handleQueueUpdate);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('offline-queue-updated', handleQueueUpdate);
+    };
+  }, []);
+
+  const processOfflineQueue = async () => {
+    const queue = offlineQueue.getQueue();
+    if (queue.length === 0) return;
+
+    setIsSyncing(true);
+    toast.loading(`Sincronizando ${queue.length} operações pendentes...`, { id: 'sync' });
+
+    let successCount = 0;
+    for (const req of queue) {
+      try {
+        const method = req.method.toLowerCase();
+        // @ts-ignore
+        await api[method](req.url, req.body);
+        offlineQueue.remove(req.id);
+        successCount++;
+      } catch (error) {
+        console.error('Falha ao sincronizar requisição', req, error);
+      }
+    }
+
+    if (successCount > 0) {
+      toast.success(`${successCount} operações sincronizadas com a nuvem!`, { id: 'sync' });
+    } else {
+      toast.error('Erro ao sincronizar. Tentaremos novamente mais tarde.', { id: 'sync' });
+    }
+    setIsSyncing(false);
+  };
 
   const navItems = [
     { id: 'dashboard', label: 'Painel Geral', icon: LayoutDashboard, path: '/dashboard' },
@@ -36,6 +90,16 @@ export default function MainLayout() {
               <X className="w-6 h-6" />
             </button>
           </div>
+
+          {(!isOnline || queueCount > 0) && (
+            <div className={`mt-4 p-3 rounded-xl border flex items-center gap-3 ${!isOnline ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
+              {!isOnline ? <WifiOff className="w-5 h-5 shrink-0" /> : <CloudLightning className={`w-5 h-5 shrink-0 ${isSyncing ? 'animate-pulse' : ''}`} />}
+              <div className="text-xs leading-tight">
+                <p className="font-bold">{!isOnline ? 'Você está Offline' : isSyncing ? 'Sincronizando...' : 'Aguardando Conexão'}</p>
+                <p className="opacity-80 mt-0.5">{queueCount} operações na fila local</p>
+              </div>
+            </div>
+          )}
 
           <nav className="space-y-2 mt-8">
             {navItems.map((item) => (
