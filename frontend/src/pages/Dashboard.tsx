@@ -37,6 +37,10 @@ interface IAAlert {
   urgency: string;
 }
 
+import { api } from '../lib/axios';
+
+// ... (interfaces removed for brevity in this chunk to focus on useEffect)
+
 export default function Dashboard() {
   const [kpis, setKpis] = useState<KPI>({
     valorComprado: 6420.0,
@@ -68,9 +72,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/dashboard')
-      .then(res => res.json())
-      .then(data => {
+    api.get('/dashboard')
+      .then(res => {
+        const data = res.data;
         if (data.kpis) setKpis(data.kpis);
         if (data.materiaisCriticos) setMateriaisCriticos(data.materiaisCriticos);
         if (data.iaAlerts) setIaAlerts(data.iaAlerts);
@@ -192,28 +196,28 @@ export default function Dashboard() {
               <svg viewBox="0 0 500 200" className="w-full h-full overflow-visible">
                 <defs>
                   <linearGradient id="cyanGlow" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.3"/>
-                    <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0"/>
+                    <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.3"/>
+                    <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.0"/>
                   </linearGradient>
                   <linearGradient id="emeraldGlow" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#10b981" stop-opacity="0.3"/>
-                    <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.3"/>
+                    <stop offset="100%" stopColor="#10b981" stopOpacity="0.0"/>
                   </linearGradient>
                 </defs>
                 
                 {/* Grid Lines */}
-                <line x1="0" y1="40" x2="500" y2="40" stroke="rgba(255,255,255,0.03)" stroke-width="1" />
-                <line x1="0" y1="90" x2="500" y2="90" stroke="rgba(255,255,255,0.03)" stroke-width="1" />
-                <line x1="0" y1="140" x2="500" y2="140" stroke="rgba(255,255,255,0.03)" stroke-width="1" />
-                <line x1="0" y1="190" x2="500" y2="190" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
+                <line x1="0" y1="40" x2="500" y2="40" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+                <line x1="0" y1="90" x2="500" y2="90" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+                <line x1="0" y1="140" x2="500" y2="140" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+                <line x1="0" y1="190" x2="500" y2="190" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
 
                 {/* Cyan Area (Compras) */}
                 <path d="M 0 190 Q 70 80 120 110 T 250 50 T 380 90 T 500 40 L 500 190 L 0 190 Z" fill="url(#cyanGlow)" />
-                <path d="M 0 190 Q 70 80 120 110 T 250 50 T 380 90 T 500 40" fill="none" stroke="#06b6d4" stroke-width="2.5" className="drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]" />
+                <path d="M 0 190 Q 70 80 120 110 T 250 50 T 380 90 T 500 40" fill="none" stroke="#06b6d4" strokeWidth="2.5" className="drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]" />
 
                 {/* Emerald Area (Consumo) */}
                 <path d="M 0 190 Q 70 140 120 120 T 250 100 T 380 70 T 500 95 L 500 190 L 0 190 Z" fill="url(#emeraldGlow)" />
-                <path d="M 0 190 Q 70 140 120 120 T 250 100 T 380 70 T 500 95" fill="none" stroke="#10b981" stroke-width="2.5" className="drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
+                <path d="M 0 190 Q 70 140 120 120 T 250 100 T 380 70 T 500 95" fill="none" stroke="#10b981" strokeWidth="2.5" className="drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
 
                 {/* Chart Dots */}
                 <circle cx="120" cy="110" r="4" fill="#06b6d4" />

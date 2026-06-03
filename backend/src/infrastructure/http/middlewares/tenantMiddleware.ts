@@ -1,22 +1,26 @@
 import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
 
-/**
- * Middleware that extracts tenantId from the JWT payload (assumed to be decoded
- * by an upstream auth middleware) and attaches it to the request object.
- * If no tenantId is present, the request is rejected with 401.
- */
-export function tenantMiddleware(req: Request, res: Response, next: NextFunction) {
-  // Assuming a previous auth middleware set req.user
-  const user = (req as any).user;
-  if (user && typeof user.tenantId === 'string') {
-    (req as any).tenantId = user.tenantId;
-    return next();
+export const tenantMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Token não fornecido ou inválido' });
+    return;
   }
-  // Fallback: try to read a header (useful during dev without auth)
-  const tenantIdHeader = req.headers['x-tenant-id'];
-  if (typeof tenantIdHeader === 'string') {
-    (req as any).tenantId = tenantIdHeader;
-    return next();
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret123') as any;
+    
+    // Inject data into req
+    req.tenantId = decoded.tenantId;
+    req.userId = decoded.userId;
+    req.userRole = decoded.role;
+    
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Token inválido ou expirado' });
   }
-  return res.status(401).json({ error: 'Tenant identification missing' });
-}
+};

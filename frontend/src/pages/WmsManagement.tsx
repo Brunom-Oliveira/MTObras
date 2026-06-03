@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
+  Package, 
   MapPin, 
   RefreshCw, 
   Plus, 
@@ -10,8 +11,17 @@ import {
   Barcode,
   Layers,
   ChevronRight,
-  TrendingDown
+  TrendingDown,
+  CheckCircle2,
+  ChevronDown,
+  ListFilter,
+  Boxes,
+  AlertTriangle
 } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '../lib/axios';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '../contexts/AuthContext';
 
 interface EstoqueItem {
   id: string;
@@ -42,19 +52,26 @@ interface Obra {
 }
 
 export default function WmsManagement() {
-  const [obras, setObras] = useState<Obra[]>([
-    { id: 'obra-1', code: 'OB-001', name: 'Residencial Bella Vista' },
-    { id: 'obra-2', code: 'OB-002', name: 'Edifício Sky Tower' }
-  ]);
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { data: obras = [] } = useQuery({ queryKey: ['obras'], queryFn: async () => (await api.get('/obras')).data });
   const [selectedObraId, setSelectedObraId] = useState('obra-1');
-  const [estoqueList, setEstoqueList] = useState<EstoqueItem[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const { data: estoqueList = [], isLoading: loading } = useQuery({
+    queryKey: ['estoques', selectedObraId],
+    queryFn: async () => (await api.get(`/estoque/${selectedObraId}`)).data,
+    enabled: !!selectedObraId
+  });
 
   // Formulário de Endereçamento
   const [targetEstoqueId, setTargetEstoqueId] = useState('');
   const [local, setLocal] = useState('Contêiner Principal');
   const [subLocal, setSubLocal] = useState('Prateleira A1');
   const [qtdEnderecada, setQtdEnderecada] = useState('');
+
+  if (!targetEstoqueId && estoqueList.length > 0) {
+    setTargetEstoqueId(estoqueList[0].id);
+  }
 
   // Painel de Inventário Rotativo
   const [isCounting, setIsCounting] = useState(false);
@@ -64,106 +81,25 @@ export default function WmsManagement() {
 
   const categories = ['Todos', 'Cimento e Argamassa', 'Aço e Ferro', 'Agregados', 'Acabamento'];
 
-  const fetchEstoque = () => {
-    setLoading(true);
-    fetch(`http://localhost:3001/api/estoque/${selectedObraId}`)
-      .then(res => res.json())
-      .then(data => {
-        setEstoqueList(data);
-        if (data.length > 0 && !targetEstoqueId) {
-          setTargetEstoqueId(data[0].id);
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Erro ao buscar estoques, usando mock fallback", err);
-        // Fallback local mock data base
-        const mockEst = [
-          {
-            id: 'est-1',
-            obraId: 'obra-1',
-            materialId: 'mat-1',
-            materialCode: 'MAT-CIM-01',
-            materialDesc: 'Cimento CP II 50kg',
-            materialCategory: 'Cimento e Argamassa',
-            quantity: 240.0,
-            reservedQty: 40.0,
-            minQty: 100.0,
-            unit: 'SACO',
-            enderecos: [
-              { id: 'end-1', estoqueObraId: 'est-1', local: 'Sala de Cimento', subLocal: 'Pilha A1', quantity: 140.0 },
-              { id: 'end-2', estoqueObraId: 'est-1', local: 'Sala de Cimento', subLocal: 'Pilha A2', quantity: 100.0 }
-            ]
-          },
-          {
-            id: 'est-2',
-            obraId: 'obra-1',
-            materialId: 'mat-2',
-            materialCode: 'MAT-ACO-02',
-            materialDesc: 'Vergalhão CA-50 10mm 12m',
-            materialCategory: 'Aço e Ferro',
-            quantity: 85.0,
-            reservedQty: 10.0,
-            minQty: 50.0,
-            unit: 'BARRA',
-            enderecos: [
-              { id: 'end-3', estoqueObraId: 'est-2', local: 'Pátio Externo', subLocal: 'Área Aberta Sul', quantity: 85.0 }
-            ]
-          },
-          {
-            id: 'est-3',
-            obraId: 'obra-1',
-            materialId: 'mat-3',
-            materialCode: 'MAT-ARE-03',
-            materialDesc: 'Areia Lavada Fina',
-            materialCategory: 'Agregados',
-            quantity: 12.0,
-            reservedQty: 0.0,
-            minQty: 15.0,
-            unit: 'M3',
-            enderecos: [
-              { id: 'end-4', estoqueObraId: 'est-3', local: 'Pátio Externo', subLocal: 'Baia de Areia', quantity: 12.0 }
-            ]
-          }
-        ];
-        
-        const filtered = mockEst.filter(e => e.obraId === selectedObraId);
-        setEstoqueList(filtered);
-        if (filtered.length > 0) setTargetEstoqueId(filtered[0].id);
-        setLoading(false);
-      });
-  };
-
-  useEffect(() => {
-    fetchEstoque();
-  }, [selectedObraId]);
+  const enderecarMutation = useMutation({
+    mutationFn: (data: any) => api.post('/estoque/enderecar', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['estoques'] });
+      toast.success('Endereçamento concluído!');
+      setQtdEnderecada('');
+    },
+    onError: () => toast.error('Erro ao endereçar.')
+  });
 
   const handleEnderecar = (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetEstoqueId || !qtdEnderecada) return;
-
-    fetch('http://localhost:3001/api/estoque/enderecar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        estoqueObraId: targetEstoqueId,
-        local,
-        subLocal,
-        quantity: parseFloat(qtdEnderecada)
-      })
-    })
-      .then(res => res.json())
-      .then(data => {
-        alert(data.message || 'Endereçamento salvo com sucesso!');
-        setQtdEnderecada('');
-        fetchEstoque();
-      })
-      .catch(err => {
-        console.error("Erro ao salvar endereçamento local", err);
-        // Fallback local
-        alert("Endereçamento simulado com sucesso (Fallbacked em memória)!");
-        setQtdEnderecada('');
-      });
+    enderecarMutation.mutate({
+      estoqueObraId: targetEstoqueId,
+      local,
+      subLocal,
+      quantity: parseFloat(qtdEnderecada)
+    });
   };
 
   const startInventario = () => {
@@ -181,35 +117,35 @@ export default function WmsManagement() {
     setContagens(prev => ({ ...prev, [materialId]: val }));
   };
 
-  const saveInventario = () => {
-    // Montar items contados
-    const itemsContados = Object.keys(contagens).map(matId => ({
-      materialId: matId,
-      qtyPhysical: parseFloat(contagens[matId]) || 0.0
-    }));
+  const inventarioMutation = useMutation({
+    mutationFn: (data: any) => api.post('/inventario', data),
+    onSuccess: () => {
+      toast.success('Inventário rotativo concluído!');
+      queryClient.invalidateQueries({ queryKey: ['estoques'] });
+      setIsCounting(false);
+      setContagens({});
+      setInventarioResults([]);
+    },
+    onError: () => toast.error('Erro ao salvar inventário.')
+  });
 
-    fetch('http://localhost:3001/api/inventarios', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        obraId: selectedObraId,
-        type: 'ROTATIVO',
-        itemsContados
-      })
-    })
-      .then(res => res.json())
-      .then(data => {
-        setIsCounting(false);
-        setContagens({});
-        alert("Inventário Cíclico auditado e concluído. Desvios processados.");
-        fetchEstoque();
-      })
-      .catch(err => {
-        console.error("Erro ao salvar inventário", err);
-        alert("Erro na gravação. Inventário rotativo simulado localmente!");
-        setIsCounting(false);
-        setContagens({});
-      });
+  const handleConcluirInventario = () => {
+    const itemsToSave = Object.keys(contagens).map(matId => {
+      const est = estoqueList.find((e: any) => e.materialId === matId);
+      return {
+        materialId: matId,
+        systemQty: est?.quantity || 0,
+        countedQty: parseFloat(contagens[matId]) || 0
+      };
+    });
+
+    if (itemsToSave.length === 0) return;
+
+    inventarioMutation.mutate({
+      obraId: selectedObraId,
+      responsibleId: user?.id,
+      items: itemsToSave
+    });
   };
 
   return (
@@ -425,7 +361,7 @@ export default function WmsManagement() {
                     Cancelar
                   </button>
                   <button 
-                    onClick={saveInventario}
+                    onClick={handleConcluirInventario}
                     className="py-2 px-4 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow transition flex items-center gap-1.5"
                   >
                     <CheckCircle className="w-4 h-4" />

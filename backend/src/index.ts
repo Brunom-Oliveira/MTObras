@@ -26,6 +26,10 @@ setupSwagger(app);
 const port = process.env.PORT || 3001;
 const prisma = new PrismaClient();
 
+// Auth routes (unprotected)
+import { authRoutes } from './infrastructure/http/routes/authRoutes';
+app.use('/api/auth', authRoutes);
+
 // --- TENANT MIDDLEWARE (moved to separate file) ---
 app.use(tenantMiddleware);
 
@@ -211,6 +215,39 @@ app.post('/api/materiais', async (req, res) => {
 });
 
 // 4. Estoque e Endereçamento (WMS)
+app.get('/api/estoque', async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  try {
+    const list = await prisma.estoqueObra.findMany({
+      where: { obra: { tenantId } },
+      include: {
+        material: true,
+        obra: true
+      }
+    });
+
+    const mapped = list.map(est => ({
+      id: est.id,
+      obraId: est.obraId,
+      obraName: est.obra.name,
+      materialId: est.materialId,
+      quantity: est.quantity,
+      reservedQty: est.reservedQty,
+      minQty: est.minQty,
+      avgConsumption: est.avgConsumption,
+      materialCode: est.material.code,
+      materialDesc: est.material.description,
+      materialCategory: est.material.category,
+      unit: est.material.unit
+    }));
+
+    res.json(mapped);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erro ao buscar estoque consolidado.' });
+  }
+});
+
 app.get('/api/estoque/:obraId', async (req, res) => {
   const { obraId } = req.params;
   try {
@@ -893,6 +930,25 @@ app.get('/api/equipamentos', async (req, res) => {
     res.json(formatted);
   } catch (error) {
     res.status(500).json({ error: 'Erro ao buscar catálogo de equipamentos.' });
+  }
+});
+
+app.post('/api/equipamentos', async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  const { code, name, type } = req.body;
+  try {
+    const newEq = await prisma.equipamento.create({
+      data: {
+        tenantId,
+        code: code || `EQ-${Date.now().toString().slice(-4)}`,
+        name,
+        type: type || 'Geral',
+        status: EquipStatus.DISPONIVEL
+      }
+    });
+    res.status(201).json(newEq);
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao cadastrar equipamento.' });
   }
 });
 
